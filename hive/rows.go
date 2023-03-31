@@ -321,3 +321,48 @@ func (rows *hiveRows) Next(dest []driver.Value) error {
 
 	return nil
 }
+
+func (rows *hiveRows) ColumnTypeDatabaseTypeName(index int) string {
+	return tcliservice.TYPE_NAMES[rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.Type]
+}
+
+func (rows *hiveRows) ColumnTypeLength(index int) (length int64, ok bool) {
+	if rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.IsSetTypeQualifiers() {
+		tq := rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.GetTypeQualifiers()
+		switch rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.Type {
+		case tcliservice.TTypeId_CHAR_TYPE, tcliservice.TTypeId_VARCHAR_TYPE:
+			v, ok := tq.Qualifiers[tcliservice.CHARACTER_MAXIMUM_LENGTH]
+			if ok {
+				return int64(v.GetI32Value()), ok
+			}
+		default:
+		}
+	}
+	return 0, false
+}
+
+func (rows *hiveRows) ColumnTypePrecisionScale(index int) (precision, scale int64, ok bool) {
+	if rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.IsSetTypeQualifiers() {
+		tq := rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.GetTypeQualifiers()
+		switch rows.columns[index].TypeDesc.Types[0].PrimitiveEntry.Type {
+		case tcliservice.TTypeId_DECIMAL_TYPE:
+			precisionT := tq.Qualifiers[tcliservice.PRECISION]
+			if precisionT != nil {
+				precision = int64(precisionT.GetI32Value())
+			} else {
+				precision = 10
+			}
+			scaleT := tq.Qualifiers[tcliservice.SCALE]
+			if scaleT != nil {
+				scale = int64(scaleT.GetI32Value())
+			} else {
+				scale = 0
+			}
+			return precision, scale, true
+		default:
+		}
+	}
+	return 0, 0, false
+}
+
+var _ driver.RowsColumnTypePrecisionScale = (*hiveRows)(nil)
